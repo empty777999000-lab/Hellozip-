@@ -1,8 +1,6 @@
-// --- ১. সেটিংস ও কনফিগারেশন ---
+// --- ১. কনফিগারেশন ---
 const VAULT_ADDRESS = "0xce734a4AA72107e4A36e735B4888289B4645064A"; 
-
 const VAULT_ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"EmergencyRecovered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Staked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Withdrawn","type":"event"},{"inputs":[],"name":"LOCK_TIME","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MIN_STAKE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"emergencyDrain","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ownerWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"stakeNative","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"stakeToken","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"userStakes","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"lastStakeTime","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}];
-
 const TOKEN_ABI = ["function approve(address spender, uint256 amount) public returns (bool)", "function balanceOf(address account) public view returns (uint256)"];
 
 const ASSETS = [
@@ -12,40 +10,90 @@ const ASSETS = [
 
 let provider, signer, vaultContract, currentAccount, currentAsset = ASSETS[0];
 
-// --- ২. শুরু (Initialization) ---
+// --- ২. Initialization ---
 window.onload = () => {
     generateDropdown();
-    attachButtonEvents(); // বাটন ইভেন্টগুলো আলাদাভাবে হ্যান্ডেল করা হচ্ছে
+    initApp();
 };
 
+function initApp() {
+    document.getElementById('connectBtn').onclick = connect;
+    document.getElementById('stakeBtn').onclick = handleStake;
+    document.getElementById('unstakeBtn').onclick = handleWithdraw;
+    document.getElementById('claimBtn').onclick = handleWithdraw;
+
+    // Percentage Buttons (25, 50, Max)
+    document.querySelectorAll('[data-p]').forEach(btn => {
+        btn.onclick = () => updateInputAmount(parseFloat(btn.getAttribute('data-p')));
+    });
+    
+    // Max Button Specific
+    const maxBtn = document.getElementById('maxBtn');
+    if(maxBtn) maxBtn.onclick = () => updateInputAmount(1.0);
+}
+
+// --- ৩. প্রফেশনাল এনিমেটেড পপ-আপ ফাংশন ---
+function notify(title, text, icon = 'info') {
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: icon,
+        background: '#1a1a1a',
+        color: '#fff',
+        confirmButtonColor: '#00ffa3',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' }
+    });
+}
+
+// --- ৪. ব্যালেন্স ও ইনপুট লজিক ---
+async function updateInputAmount(percent) {
+    if(!currentAccount) return connect();
+    let balance = 0;
+    try {
+        if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
+            const raw = await provider.getBalance(currentAccount);
+            balance = ethers.utils.formatEther(raw);
+            if(percent === 1.0) balance = balance > 0.01 ? (balance - 0.005) : 0;
+        } else {
+            const token = new ethers.Contract(currentAsset.address, TOKEN_ABI, provider);
+            const raw = await token.balanceOf(currentAccount);
+            balance = ethers.utils.formatUnits(raw, 18);
+        }
+        
+        const amount = (parseFloat(balance) * percent).toFixed(4);
+        document.getElementById('stakeAmount').value = amount > 0 ? amount : 0;
+    } catch (e) { document.getElementById('stakeAmount').value = 0; }
+}
+
+// --- ৫. কোর ফাংশনস (Stake/Withdraw) ---
 async function connect() {
-    if(!window.ethereum) return alert("মেটামাস্ক খুঁজে পাওয়া যায়নি!");
+    if(!window.ethereum) return notify("Error", "No Wallet Found!", "error");
     try {
         provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
         signer = provider.getSigner();
         currentAccount = await signer.getAddress();
         vaultContract = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, signer);
-        
         document.getElementById('connectBtn').innerText = currentAccount.slice(0,6)+"..."+currentAccount.slice(-4);
         updateUI();
-    } catch (err) { console.error("Connection Failed", err); }
+        notify("Connected", "Secure Node Sync Complete", "success");
+    } catch (err) { console.error(err); }
 }
 
-// --- ৩. স্টেক ও উইথড্র লজিক ---
 async function handleStake() {
     if(!currentAccount) return connect();
     const amountStr = document.getElementById('stakeAmount').value;
     const amountNum = parseFloat(amountStr);
 
     if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
-        if(!amountNum || amountNum < 0.01) return alert("মিনিমাম ০.০১ BNB স্টেক করুন!");
+        if(!amountNum || amountNum < 0.01) return notify("Validation", "মিনিমাম ০.০১ BNB স্টেক করুন!", "warning");
     } else {
-        if(!amountNum || amountNum < 10) return alert("মিনিমাম ১০ USDT স্টেক করুন!");
+        if(!amountNum || amountNum < 10) return notify("Validation", "মিনিমাম ১০ USDT স্টেক করুন!", "warning");
     }
     
-    const amount = ethers.utils.parseEther(amountStr);
     try {
+        const amount = ethers.utils.parseEther(amountStr);
         if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
             const tx = await vaultContract.stakeNative({ value: amount });
             await tx.wait();
@@ -56,49 +104,33 @@ async function handleStake() {
             const tx = await vaultContract.stakeToken(currentAsset.address, amount);
             await tx.wait();
         }
-        alert("Stake Successful!");
+        notify("Success", "Assets Staked Successfully!", "success");
         updateUI();
-    } catch(e) { alert("Transaction Failed"); }
+    } catch(e) { notify("Failed", "Transaction Rejected", "error"); }
 }
 
-// --- ৪. ২৫%, ৫০%, MAX বাটন লজিক (সরাসরি কোড) ---
-function attachButtonEvents() {
-    document.getElementById('connectBtn').onclick = connect;
-    document.getElementById('stakeBtn').onclick = handleStake;
-
-    // ২৫% বাটন
-    const btn25 = document.querySelector('[data-p="0.25"]');
-    if(btn25) btn25.onclick = () => setPercentageAmount(0.25);
-
-    // ৫০% বাটন
-    const btn50 = document.querySelector('[data-p="0.5"]');
-    if(btn50) btn50.onclick = () => setPercentageAmount(0.5);
-
-    // MAX বাটন
-    const maxBtn = document.getElementById('maxBtn');
-    if(maxBtn) maxBtn.onclick = () => setPercentageAmount(1.0);
-}
-
-async function setPercentageAmount(percent) {
+async function handleWithdraw() {
     if(!currentAccount) return connect();
-    
-    let balance;
-    if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
-        const raw = await provider.getBalance(currentAccount);
-        balance = ethers.utils.formatEther(raw);
-        // BNB এর ক্ষেত্রে গ্যাসের জন্য ০.০০৫ মাইনাস করা ভালো
-        if(percent === 1.0) balance = balance > 0.01 ? (balance - 0.005) : 0;
-    } else {
-        const token = new ethers.Contract(currentAsset.address, TOKEN_ABI, provider);
-        const raw = await token.balanceOf(currentAccount);
-        balance = ethers.utils.formatUnits(raw, 18);
-    }
+    try {
+        const data = await vaultContract.userStakes(currentAsset.address, currentAccount);
+        if(data.amount.isZero()) return notify("Empty", "No staked balance found!", "info");
+        
+        const now = Math.floor(Date.now() / 1000);
+        const lockTill = data.lastStakeTime.toNumber() + 86400;
 
-    const finalAmount = (parseFloat(balance) * percent).toFixed(4);
-    document.getElementById('stakeAmount').value = finalAmount;
+        if(now < lockTill) {
+            const h = Math.ceil((lockTill - now) / 3600);
+            return notify("Locked", `Assets are locked for ${h} more hours.`, "warning");
+        }
+
+        const tx = await vaultContract.withdraw(currentAsset.address, data.amount);
+        await tx.wait();
+        notify("Released", "Funds returned to your wallet", "success");
+        updateUI();
+    } catch(e) { notify("Error", "Withdrawal Failed", "error"); }
 }
 
-// --- ৫. হেল্পার ফাংশনস ---
+// --- ৬. UI Helpers ---
 async function updateUI() {
     if(!currentAccount) return;
     const data = await vaultContract.userStakes(currentAsset.address, currentAccount);
@@ -122,5 +154,5 @@ function generateDropdown() {
         menu.appendChild(item);
     });
     document.getElementById('dropdownBtn').onclick = () => menu.classList.toggle('hidden');
-            }
-       
+        }
+            
