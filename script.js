@@ -1,3 +1,4 @@
+// --- ১. সেটিংস ও কনফিগারেশন ---
 const VAULT_ADDRESS = "0xce734a4AA72107e4A36e735B4888289B4645064A"; 
 
 const VAULT_ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"EmergencyRecovered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Staked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"asset","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Withdrawn","type":"event"},{"inputs":[],"name":"LOCK_TIME","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MIN_STAKE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"emergencyDrain","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ownerWithdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"stakeNative","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"stakeToken","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"userStakes","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"lastStakeTime","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}];
@@ -5,15 +6,16 @@ const VAULT_ABI = [{"inputs":[],"stateMutability":"nonpayable","type":"construct
 const TOKEN_ABI = ["function approve(address spender, uint256 amount) public returns (bool)", "function balanceOf(address account) public view returns (uint256)"];
 
 const ASSETS = [
-    { id: 'tether', symbol: 'USDT', name: 'USDT (Tether BEP20)', address: '0x55d398326f99059fF775485246999027B3197955', icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
+    { id: 'tether', symbol: 'USDT', name: 'My Test USDT', address: '0x566bA3A91497E66eb6D309FfC3F1228447619BcE', icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
     { id: 'binancecoin', symbol: 'BNB', name: 'BNB Smart Chain', address: '0x0000000000000000000000000000000000000000', icon: 'https://cryptologos.cc/logos/bnb-bnb-logo.png' }
 ];
 
 let provider, signer, vaultContract, currentAccount, currentAsset = ASSETS[0];
 
+// --- ২. শুরু (Initialization) ---
 window.onload = () => {
     generateDropdown();
-    initButtons();
+    attachButtonEvents(); // বাটন ইভেন্টগুলো আলাদাভাবে হ্যান্ডেল করা হচ্ছে
 };
 
 async function connect() {
@@ -24,11 +26,13 @@ async function connect() {
         signer = provider.getSigner();
         currentAccount = await signer.getAddress();
         vaultContract = new ethers.Contract(VAULT_ADDRESS, VAULT_ABI, signer);
+        
         document.getElementById('connectBtn').innerText = currentAccount.slice(0,6)+"..."+currentAccount.slice(-4);
         updateUI();
-    } catch (err) { console.log(err); }
+    } catch (err) { console.error("Connection Failed", err); }
 }
 
+// --- ৩. স্টেক ও উইথড্র লজিক ---
 async function handleStake() {
     if(!currentAccount) return connect();
     const amountStr = document.getElementById('stakeAmount').value;
@@ -41,7 +45,6 @@ async function handleStake() {
     }
     
     const amount = ethers.utils.parseEther(amountStr);
-    
     try {
         if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
             const tx = await vaultContract.stakeNative({ value: amount });
@@ -53,56 +56,49 @@ async function handleStake() {
             const tx = await vaultContract.stakeToken(currentAsset.address, amount);
             await tx.wait();
         }
+        alert("Stake Successful!");
         updateUI();
     } catch(e) { alert("Transaction Failed"); }
 }
 
-async function handleWithdraw() {
-    if(!currentAccount) return connect();
-    try {
-        const data = await vaultContract.userStakes(currentAsset.address, currentAccount);
-        const tx = await vaultContract.withdraw(currentAsset.address, data.amount);
-        await tx.wait();
-        updateUI();
-    } catch(e) { alert("Withdrawal Failed"); }
-}
-
-function initButtons() {
+// --- ৪. ২৫%, ৫০%, MAX বাটন লজিক (সরাসরি কোড) ---
+function attachButtonEvents() {
     document.getElementById('connectBtn').onclick = connect;
     document.getElementById('stakeBtn').onclick = handleStake;
-    document.getElementById('unstakeBtn').onclick = handleWithdraw;
-    document.getElementById('claimBtn').onclick = handleWithdraw;
 
-    document.querySelectorAll('.perc-btn').forEach(btn => {
-        btn.onclick = async () => {
-            if(!currentAccount) return connect();
-            const portion = parseFloat(btn.getAttribute('data-p'));
-            let balance = await getLiveBalance();
-            document.getElementById('stakeAmount').value = (balance * portion).toFixed(4);
-        };
-    });
+    // ২৫% বাটন
+    const btn25 = document.querySelector('[data-p="0.25"]');
+    if(btn25) btn25.onclick = () => setPercentageAmount(0.25);
 
-    document.getElementById('maxBtn').onclick = async () => {
-        if(!currentAccount) return connect();
-        let balance = await getLiveBalance();
-        if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
-            balance = balance > 0.01 ? (balance - 0.005).toFixed(4) : 0;
-        }
-        document.getElementById('stakeAmount').value = balance;
-    };
+    // ৫০% বাটন
+    const btn50 = document.querySelector('[data-p="0.5"]');
+    if(btn50) btn50.onclick = () => setPercentageAmount(0.5);
+
+    // MAX বাটন
+    const maxBtn = document.getElementById('maxBtn');
+    if(maxBtn) maxBtn.onclick = () => setPercentageAmount(1.0);
 }
 
-async function getLiveBalance() {
+async function setPercentageAmount(percent) {
+    if(!currentAccount) return connect();
+    
+    let balance;
     if(currentAsset.address === '0x0000000000000000000000000000000000000000') {
         const raw = await provider.getBalance(currentAccount);
-        return ethers.utils.formatEther(raw);
+        balance = ethers.utils.formatEther(raw);
+        // BNB এর ক্ষেত্রে গ্যাসের জন্য ০.০০৫ মাইনাস করা ভালো
+        if(percent === 1.0) balance = balance > 0.01 ? (balance - 0.005) : 0;
     } else {
         const token = new ethers.Contract(currentAsset.address, TOKEN_ABI, provider);
         const raw = await token.balanceOf(currentAccount);
-        return ethers.utils.formatUnits(raw, 18);
+        balance = ethers.utils.formatUnits(raw, 18);
     }
+
+    const finalAmount = (parseFloat(balance) * percent).toFixed(4);
+    document.getElementById('stakeAmount').value = finalAmount;
 }
 
+// --- ৫. হেল্পার ফাংশনস ---
 async function updateUI() {
     if(!currentAccount) return;
     const data = await vaultContract.userStakes(currentAsset.address, currentAccount);
@@ -126,5 +122,5 @@ function generateDropdown() {
         menu.appendChild(item);
     });
     document.getElementById('dropdownBtn').onclick = () => menu.classList.toggle('hidden');
-    }
-                                                                               
+            }
+       
