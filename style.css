@@ -1,56 +1,47 @@
-/* প্রম্পট অনুযায়ী নিওন কালার প্যালেট */
-:root {
-    --cyan: #00f2ff;
-    --purple: #7000ff;
-    --green: #00ff88;
-    --gold: #ffd700;
-}
-
-.font-tech { font-family: 'Rajdhani', sans-serif; }
-
-/* গ্লাস-মরফিজম এফেক্ট */
-.glass-main {
-    background: rgba(10, 15, 30, 0.4);
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
-}
-
-/* প্রম্পট অনুযায়ী Trinity বাটন ডিজাইন */
-.btn-stake {
-    background: linear-gradient(135deg, var(--gold) 0%, var(--cyan) 100%);
-    color: #000;
-    box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
-}
-
-.btn-unstake {
-    background: linear-gradient(135deg, #ff00ff 0%, var(--purple) 100%);
-    color: #fff;
-    box-shadow: 0 0 20px rgba(112, 0, 255, 0.2);
-}
-
-.btn-claim {
-    background: linear-gradient(135deg, var(--cyan) 0%, #0066ff 100%);
-    color: #fff;
-    box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+/* Custom Styles */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .perc-btn {
-    font-size: 8px;
-    padding: 2px 8px;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 4px;
-    color: #64748b;
+    flex: 1;
+    padding: 8px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    font-size: 10px;
+    font-weight: bold;
+    color: #888;
+    transition: all 0.2s ease;
 }
 
-.pill-status {
-    box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+.perc-btn:hover {
+    background: rgba(0, 255, 163, 0.1);
+    border-color: #00ffa3;
+    color: #00ffa3;
+    transform: translateY(-2px);
 }
 
-/* অ্যানিমেশন */
-@keyframes fadeInLog {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+.perc-btn:active {
+    transform: scale(0.95);
 }
 
-.log-entry { animation: fadeInLog 0.3s ease-out forwards; }
+/* SweetAlert Dark Theme Customization */
+.swal2-popup {
+    border-radius: 24px !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    font-family: 'sans-serif' !important;
+}
+
+/* Glowing Stake Button */
+#stakeBtn {
+    box-shadow: 0 4px 15px rgba(0, 255, 163, 0.2);
+}
+
+/* Background gradient animation */
+body {
+    background: radial-gradient(circle at top right, #0a1f1a, #0a0a0a 40%);
+    background-attachment: fixed;
+}
